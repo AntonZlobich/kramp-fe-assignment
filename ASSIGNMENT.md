@@ -75,6 +75,7 @@ While reviewing the code, consider looking at:
 - Do not migrate to the App Router or React Server Components
 - Avoid major structural changes in [./apps/server](./apps/server/)
   - Minor fixes or improvement proposals are welcome
+  - The schema intentionally has some timeouts to simulate slow APIs, please do not remove them to make it fast.
 
 ## Time Expectations
 
