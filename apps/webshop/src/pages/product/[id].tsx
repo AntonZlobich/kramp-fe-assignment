@@ -1,59 +1,66 @@
-import { useRouter } from 'next/router';
-import { useContext, useEffect, useState } from 'react';
+import { useContext } from 'react';
 import { CartContext } from '../_app';
+import type { GetStaticPaths, GetStaticProps } from 'next';
+import { fetchGraphQL } from '../../utils/fetchGraphQL';
+import { formatPrice } from '../../utils/formatPrice';
+import { Product } from '../../types';
+
 import styles from './[id].module.css';
 
-var GRAPHQL_URL = 'http://localhost:4000/graphql';
+interface ProductPageProps {
+  product?: Product;
+}
 
-export default function ProductPage() {
-  const router = useRouter();
-  const { cart } = useContext(CartContext) as any;
-  const [product, setProduct] = useState<any>(null);
-  useEffect(() => {
-    if (!router.query.id) return;
+export const getStaticPaths: GetStaticPaths = async () => {
+  return {
+    paths: [],
+    fallback: 'blocking',
+  };
+};
+export const getStaticProps: GetStaticProps<
+  ProductPageProps
+> = async context => {
+  const id = context.params?.id;
 
-    fetch(GRAPHQL_URL, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        query: `
-          query GetProduct($id: ID!) {
-            product(id: $id) {
-              id
-              name
-              description
-              price
-              category
-              imageUrl
-              stock
-              createdAt
-            }
+  const data =
+    id != null
+      ? await fetchGraphQL<{ product: Product }>(
+          `
+      query GetProduct($id: ID!) {
+        product(id: $id) {
+          id
+          name
+          description
+          price
+          category
+          imageUrl
+          stock
+          createdAt
+        }
+      }
+    `,
+          { id },
+        )
+      : undefined;
+
+  return {
+    props: {
+      product: data?.product
+        ? {
+            ...data.product,
+            createdAt: new Date(data.product.createdAt).toLocaleDateString(),
           }
-        `,
-        variables: { id: router.query.id },
-      }),
-    })
-      .then(res => res.json())
-      .then(data => {
-        console.log('product loaded:', data);
-        setProduct(data.data.product);
-      });
-  }, [cart]);
+        : undefined,
+    },
+    revalidate: 60,
+  };
+};
+
+export default function ProductPage({ product }: ProductPageProps) {
+  const { cart } = useContext(CartContext) as any;
 
   const handleAddToCart = () => {
-    if (!product) return;
-
-    const currentItems = [...(cart.cart || []), {
-      productId: product.id,
-      name: product.name,
-      price: product.price,
-      quantity: 1,
-    }];
-    let runningTotal = 0;
-    for (let i = 0; i < currentItems.length; i++) {
-      runningTotal += currentItems[i].price * currentItems[i].quantity;
-    }
-    console.log('cart total after add:', runningTotal);
+    if (!product || !product.stock) return;
 
     cart.addToCart({
       productId: product.id,
@@ -66,7 +73,7 @@ export default function ProductPage() {
   if (!product) {
     return (
       <div className={styles.page}>
-        <p>Loading...</p>
+        <p>No data</p>
       </div>
     );
   }
@@ -75,21 +82,17 @@ export default function ProductPage() {
     <div className={styles.page}>
       <div className={styles.inner}>
         <div className={styles.imageWrapper}>
-          <img
-            src={product!.imageUrl}
-            alt=""
-            className={styles.image}
-          />
+          <img src={product.imageUrl} alt="" className={styles.image} />
         </div>
         <div className={styles.details}>
-          <p className={styles.category}>{product!.category}</p>
-          <h1 className={styles.name}>{product!.name}</h1>
-          <p className={styles.price}>€{product!.price.toFixed(2)}</p>
-          <p className={styles.description}>{product!.description}</p>
+          <p className={styles.category}>{product.category}</p>
+          <h1 className={styles.name}>{product.name}</h1>
+          <p className={styles.price}>{formatPrice(product.price)}</p>
+          <p className={styles.description}>{product.description}</p>
           <p className={styles.meta}>
-            Listed: {new Date(product!.createdAt).toLocaleDateString()}
+            Listed: {product.createdAt}
             {' · '}
-            {product!.stock} in stock
+            {product.stock} in stock
           </p>
           <div className={styles.addToCart} onClick={handleAddToCart}>
             Add to cart
