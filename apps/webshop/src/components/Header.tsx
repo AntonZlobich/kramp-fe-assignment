@@ -1,57 +1,27 @@
-import { useContext, useEffect, useState } from 'react';
+import _ from 'lodash';
+import { useContext, useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/router';
 import Link from 'next/link';
-import _ from 'lodash';
 import { CartContext } from '../pages/_app';
 import { SearchDialog } from './SearchDialog';
 import { CartIcon } from './cartIcon';
-import { useDebounce } from '../hooks/useDebounce';
+import { fetchGraphQL } from '../utils/fetchGraphQL';
+import type { Product } from '../types';
+
 import styles from './Header.module.css';
 
-var GRAPHQL_URL = 'http://localhost:4000/graphql';
+type HeaderSearchProduct = Pick<Product, 'id' | 'name' | 'price'>;
 
 export function Header() {
   const router = useRouter();
   const { cart } = useContext(CartContext);
   const [query, setQuery] = useState('');
-  const [results, setResults] = useState<any[]>([]);
+  const [results, setResults] = useState<HeaderSearchProduct[]>([]);
   const [isOpen, setIsOpen] = useState(false);
 
   useEffect(() => {
     setIsOpen(results.length > 0);
   }, [results]);
-
-  useEffect(() => {
-    if (!query) {
-      setResults([]);
-      return;
-    }
-
-    fetch(GRAPHQL_URL, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        query: `
-          query Search($q: String!) {
-            searchProducts(query: $q) {
-              id
-              name
-              price
-              imageUrl
-              description
-              stock
-              createdAt
-            }
-          }
-        `,
-        variables: { q: query },
-      }),
-    })
-      .then(res => res.json())
-      .then(data => {
-        setResults(data.data.searchProducts.slice(0, 5));
-      });
-  }, [query]);
 
   useEffect(() => {
     const handleOutsideClick = () => {
@@ -60,10 +30,50 @@ export function Header() {
     document.addEventListener('click', handleOutsideClick);
   }, []);
 
+  const debouncedSearch = useMemo(
+    () =>
+      _.debounce((query) => {
+        fetchGraphQL<{ searchProducts: HeaderSearchProduct[] }>(
+          `
+            query Search($q: String!) {
+              searchProducts(query: $q) {
+                id
+                name
+                price
+              }
+            }
+          `,
+          { q: query },
+        ).then(data => {
+          setResults(data.searchProducts.slice(0, 5));
+        });
+      }, 250),
+    [],
+  );
+
+  useEffect(() => {
+    return () => debouncedSearch.cancel();
+  }, [debouncedSearch]);
+
+  const handleQueryChange = (newQuery: string) => {
+    setQuery(newQuery);
+
+    if (!newQuery) {
+      setResults([]);
+      return;
+    }
+
+    debouncedSearch(newQuery);
+  };
+
   const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
-    if (e.key === 'Enter' && query.trim()) {
-      router.push('/search?q=' + encodeURIComponent(query));
+    if (e.key === 'Enter') {
       setIsOpen(false);
+      if (query.trim()) {
+        router.push('/search?q=' + encodeURIComponent(query));
+      } else {
+        router.push('/search');
+      }
     }
   };
 
@@ -71,7 +81,9 @@ export function Header() {
     return router.pathname.indexOf(path) !== -1;
   };
 
-  const truncatedQuery = query.substr(0, 30);
+  const truncatedQuery = query.length > 30
+    ? query.substring(0, 30)
+    : undefined;
 
   return (
     <header className={styles.header}>
@@ -83,19 +95,27 @@ export function Header() {
         <nav className={styles.nav}>
           <Link
             href="/"
-            className={isActivePage('/') && router.pathname === '/' ? styles.activeLink : styles.navLink}
+            className={
+              isActivePage('/') && router.pathname === '/'
+                ? styles.activeLink
+                : styles.navLink
+            }
           >
             Home
           </Link>
           <Link
             href="/search"
-            className={isActivePage('/search') ? styles.activeLink : styles.navLink}
+            className={
+              isActivePage('/search') ? styles.activeLink : styles.navLink
+            }
           >
             Products
           </Link>
           <Link
             href="/checkout"
-            className={isActivePage('/checkout') ? styles.activeLink : styles.navLink}
+            className={
+              isActivePage('/checkout') ? styles.activeLink : styles.navLink
+            }
           >
             Checkout
           </Link>
@@ -107,12 +127,17 @@ export function Header() {
             value={query}
             placeholder="Search products..."
             className={styles.searchInput}
-            onChange={e => setQuery(e.target.value)}
+            onChange={e => handleQueryChange(e.target.value)}
             onKeyDown={handleKeyDown}
             onClick={e => e.stopPropagation()}
+            onFocus={() => {
+              setIsOpen(results.length > 0);
+            }}
           />
-          {truncatedQuery && query.length > 30 && (
-            <span className={styles.truncatedHint}>Searching: {truncatedQuery}…</span>
+          {truncatedQuery && (
+            <span className={styles.truncatedHint}>
+              Searching: {truncatedQuery}…
+            </span>
           )}
           {isOpen && (
             <SearchDialog
