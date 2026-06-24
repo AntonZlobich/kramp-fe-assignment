@@ -16,6 +16,9 @@ export interface CartItem {
   quantity: number;
 }
 
-export type SearchResult = any;
-
 export type ProductCategory = 'Tools' | 'Fasteners' | 'Safety Equipment' | 'Power Tools';
+
+export type PartiallyRequired<Type, RequiredFields extends keyof Type> = Required<
+  Pick<Type, RequiredFields>
+> &
+  Partial<Omit<Type, RequiredFields>>;
