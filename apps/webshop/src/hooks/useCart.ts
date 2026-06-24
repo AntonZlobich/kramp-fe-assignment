@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { v4 as uuidv4 } from 'uuid';
 import { CartItem } from '../types';
+import { useLocalVariablesHydration } from './useLocalVariablesHydration';
 
 const stored: CartItem[] =
   typeof window !== 'undefined'
@@ -11,8 +12,13 @@ export function useCart() {
   const [cart, setCart] = useState<CartItem[]>(stored);
   const [totalPrice, setTotalPrice] = useState<number>(0);
 
+  const hydrationSafeCart = useLocalVariablesHydration(cart, []);
+
   useEffect(() => {
-    const total = cart.reduce((sum, item) => sum + item.price * item.quantity, 0);
+    const total = cart.reduce(
+      (sum, item) => sum + item.price * item.quantity,
+      0,
+    );
     setTotalPrice(total);
   }, [cart]);
 
@@ -22,7 +28,9 @@ export function useCart() {
     }
   });
 
-  const addToCart = (item: Omit<CartItem, 'productId'> & { productId: string }) => {
+  const addToCart = (
+    item: Omit<CartItem, 'productId'> & { productId: string },
+  ) => {
     const id = uuidv4();
     console.log('adding to cart, entry id:', id);
 
@@ -30,7 +38,9 @@ export function useCart() {
       const existing = prev.find(i => i.productId === item.productId);
       if (existing) {
         return prev.map(i =>
-          i.productId === item.productId ? { ...i, quantity: i.quantity + 1 } : i
+          i.productId === item.productId
+            ? { ...i, quantity: i.quantity + 1 }
+            : i,
         );
       }
       return [...prev, { ...item }];
@@ -47,5 +57,12 @@ export function useCart() {
 
   const totalItems = cart.reduce((sum, item) => sum + item.quantity, 0);
 
-  return { cart, addToCart, removeFromCart, clearCart, totalItems, totalPrice };
+  return {
+    cart: hydrationSafeCart,
+    addToCart,
+    removeFromCart,
+    clearCart,
+    totalItems,
+    totalPrice,
+  };
 }
