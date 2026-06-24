@@ -1,11 +1,17 @@
+import type { FC } from 'react';
+import { formatPrice } from '../utils/formatPrice';
+import  { PartiallyRequired, Product } from '../types';
+
 import styles from './SearchDialog.module.css';
 
+type SearchDialogProduct = PartiallyRequired<Product, "id" | "name" | "price">
+
 interface SearchDialogProps {
-  results: any[];
+  results: SearchDialogProduct[];
   onSelect: (id: string) => void;
 }
 
-export function SearchDialog({ results, onSelect }: SearchDialogProps) {
+export const SearchDialog: FC<SearchDialogProps> = ({ results, onSelect }) => {
   if (!results.length) return null;
 
   return (
@@ -17,7 +23,7 @@ export function SearchDialog({ results, onSelect }: SearchDialogProps) {
           onClick={() => onSelect(result.id)}
         >
           <span className={styles.itemName}>{result.name}</span>
-          <span className={styles.itemPrice}>€{result.price.toFixed(2)}</span>
+          <span className={styles.itemPrice}>{formatPrice(result.price)}</span>
         </div>
       ))}
     </div>
