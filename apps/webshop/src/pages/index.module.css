@@ -62,6 +62,7 @@
 }
 
 .categories {
+  position: relative;
   max-width: 1200px;
   margin: 0 auto 48px;
   padding: 0 24px;
@@ -94,4 +95,21 @@
 .categoryCard:hover {
   background: #e63329;
   color: white;
+}
+
+.categoriesOverlay {
+  display: none;
+  position: absolute;
+  width: 100%;
+  height: calc(100% + 48px);
+  margin: -24px;
+  background: white;
+  opacity: 0.9;
+  justify-content: center;
+  align-items: center;
+  color: grey;
+}
+
+.categories:hover .categoriesOverlay {
+  display: flex;
 }

@@ -1,55 +1,44 @@
-import { GetServerSideProps } from 'next';
-import ProductCard from '../components/ProductCard';
+import type { GetStaticProps } from 'next';
+import { ProductCard } from '../components/ProductCard';
+import { fetchGraphQL } from '../utils/fetchGraphQL';
+import type { Product } from '../types';
+
 import styles from './index.module.css';
 
-export const getServerSideProps: GetServerSideProps = async () => {
-  const FEATURED_IDS = ['1', '4', '11', '17'];
-  const featured = [];
+type HomePageProduct = Pick<Product, 'id' | 'name' | 'price' | 'imageUrl'>;
 
-  for (const id of FEATURED_IDS) {
-    try {
-      const res = await fetch('http://localhost:4000/graphql', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          query: `
-            query GetProduct($id: ID!) {
-              product(id: $id) {
-                id
-                name
-                price
-                imageUrl
-                description
-                category
-                stock
-                createdAt
-              }
-            }
-          `,
-          variables: { id },
-        }),
-      });
-      const data = await res.json();
-      if (data.data?.product) {
-        featured.push(data.data.product);
+interface HomePageProps {
+  featured: HomePageProduct[];
+  lastUpdated: string;
+}
+
+export const getStaticProps: GetStaticProps<HomePageProps> = async () => {
+  const FEATURED_IDS = ['1', '4', '11', '17'];
+
+  const data = await fetchGraphQL<{ products: HomePageProduct[] }>(
+    `
+      query GetProducts($ids: [ID!]!) {
+        products(ids: $ids) {
+          id
+          name
+          price
+          imageUrl
+        }
       }
-    } catch (e) {}
-  }
+    `,
+    { ids: FEATURED_IDS },
+  );
 
   return {
     props: {
-      featured,
-      timestamp: Date.now(),
+      featured: data.products ?? [],
+      lastUpdated: new Date(Date.now()).toLocaleTimeString(),
     },
+    revalidate: 60,
   };
 };
 
-interface HomePageProps {
-  featured: any[];
-  timestamp: number;
-}
-
-export default function HomePage({ featured, timestamp }: HomePageProps) {
+export default function HomePage({ featured, lastUpdated }: HomePageProps) {
   return (
     <div>
       <section className={styles.hero}>
@@ -62,7 +51,8 @@ export default function HomePage({ featured, timestamp }: HomePageProps) {
         <div className={styles.heroContent}>
           <h1 className={styles.heroTitle}>Industrial supplies, delivered.</h1>
           <p className={styles.heroSubtitle}>
-            Tools, fasteners, safety equipment and power tools for professionals.
+            Tools, fasteners, safety equipment and power tools for
+            professionals.
           </p>
         </div>
       </section>
@@ -70,9 +60,7 @@ export default function HomePage({ featured, timestamp }: HomePageProps) {
       <section className={styles.featured}>
         <div className={styles.featuredHeader}>
           <h2>Featured products</h2>
-          <p className={styles.timestamp}>
-            Last updated: {new Date(timestamp).toLocaleTimeString()}
-          </p>
+          <p className={styles.timestamp}>Last updated: {lastUpdated}</p>
         </div>
         <div className={styles.grid}>
           {featured.map((product, index) => (
@@ -82,13 +70,22 @@ export default function HomePage({ featured, timestamp }: HomePageProps) {
       </section>
 
       <section className={styles.categories}>
+        <div className={styles.categoriesOverlay}>
+          <h2>Coming soon</h2>
+        </div>
         <h2>Shop by category</h2>
         <div className={styles.categoryGrid}>
-          {['Tools', 'Fasteners', 'Safety Equipment', 'Power Tools'].map((cat, index) => (
-            <a key={index} href={`/search?q=${cat}`} className={styles.categoryCard}>
-              {cat}
-            </a>
-          ))}
+          {['Tools', 'Fasteners', 'Safety Equipment', 'Power Tools'].map(
+            (cat, index) => (
+              <a
+                key={index}
+                href={`/search?q=${cat}`}
+                className={styles.categoryCard}
+              >
+                {cat}
+              </a>
+            ),
+          )}
         </div>
       </section>
     </div>
