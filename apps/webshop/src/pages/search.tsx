@@ -1,78 +1,82 @@
-import { useRouter } from 'next/router';
-import { useEffect, useState } from 'react';
+import type { GetServerSideProps, GetServerSidePropsContext } from 'next';
+import { ProductCard } from '../components/ProductCard';
+import { useSSRQuerySearchTracker } from '../hooks/useSSRQuerySearchTracker';
 import { groupBy } from '../utils/groupBy';
-import ProductCard from '../components/ProductCard';
+import { fetchGraphQL } from '../utils/fetchGraphQL';
+import type { Product, ProductCategory } from '../types';
+
 import styles from './search.module.css';
 
-export default function SearchPage() {
-  const router = useRouter();
-  const [results, setResults] = useState<any[]>([]);
-  const [filteredResults, setFilteredResults] = useState<any[]>([]);
-  const [isLoading, setIsLoading] = useState(false);
+type SearchPageProduct = Pick<
+  Product,
+  'id' | 'name' | 'price' | 'imageUrl' | 'category'
+>;
 
-  useEffect(() => {
-    const q = (router.query.q as string) || '';
+interface SearchPageProps {
+  grouped: Record<ProductCategory, SearchPageProduct[]> | null;
+  query: string;
+}
 
-    setIsLoading(true);
+export const getServerSideProps: GetServerSideProps<SearchPageProps> = async (
+  context: GetServerSidePropsContext,
+) => {
+  const queryData = context.query.q;
+  const query = typeof queryData === 'string' ? queryData : '';
 
-    fetch('http://localhost:4000/graphql', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        query: `
-          query SearchProducts($q: String!) {
-            searchProducts(query: $q) {
-              id
-              name
-              price
-              imageUrl
-              category
-              description
-              stock
-              createdAt
-            }
-          }
-        `,
-        variables: { q },
-      }),
-    })
-      .then(res => res.json())
-      .then(data => {
-        console.log('search results:', data);
-        setResults(data.data.searchProducts);
-        setIsLoading(false);
-      });
-  }, []);
+  const data = await fetchGraphQL<{ searchProducts: SearchPageProduct[] }>(
+    `
+      query SearchProducts($q: String!) {
+        searchProducts(query: $q) {
+          id
+          name
+          price
+          imageUrl
+          category
+        }
+      }
+    `,
+    { q: query },
+  );
 
-  useEffect(() => {
-    setFilteredResults(results);
-  }, [results]);
+  const grouped = data?.searchProducts?.length
+    ? groupBy(data.searchProducts, 'category')
+    : null;
 
-  const grouped = groupBy(filteredResults, 'category');
+  return {
+    props: {
+      grouped,
+      query,
+    },
+  };
+};
+
+export default function SearchPage({ grouped, query }: SearchPageProps) {
+  const { isSearching } = useSSRQuerySearchTracker();
 
   return (
     <div className={styles.page}>
       <div className={styles.inner}>
         <h1 className={styles.heading}>
-          {router.query.q ? `Results for "${router.query.q}"` : 'All products'}
+          {query ? `Results for "${query}"` : 'All products'}
         </h1>
 
-        {isLoading && <p>Loading...</p>}
+        {isSearching && <p>Loading...</p>}
 
-        {!isLoading && !filteredResults.length && (
+        {!isSearching && !grouped && (
           <p className={styles.empty}>No products found.</p>
         )}
 
-        {Object.keys(grouped).map(category => (
-          <section key={category} className={styles.category}>
-            <h2 className={styles.categoryTitle}>{category}</h2>
-            <div className={styles.grid}>
-              {grouped[category].map((product, index) => (
-                <ProductCard key={index} product={product} />
-              ))}
-            </div>
-          </section>
-        ))}
+        {grouped &&
+          Object.entries(grouped).map(([category, products]) => (
+            <section key={category} className={styles.category}>
+              <h2 className={styles.categoryTitle}>{category}</h2>
+              <div className={styles.grid}>
+                {products.map((product, index) => (
+                  <ProductCard key={index} product={product} />
+                ))}
+              </div>
+            </section>
+          ))}
       </div>
     </div>
   );
